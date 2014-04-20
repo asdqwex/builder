@@ -4,6 +4,39 @@ rack = false
 Connection = require 'ssh2'
 sleep = require 'sleep'
 
+# The cookbooks
+saltRepo = 'https://github.com/asdqwex/salt.git'
+
+# The keys to the kingdom
+pubKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDiYXESJlAJ1KLKRPpQetKkv4nczQKg921LB2yuO4ehFQ+yVtVYa1QAhi/Qkpqmb7FbkJd+HZ4wAbtGDEXgal14mbvMJ368zo48/AUzpBYFC9lVdVY4Pz/KBBV1uzLOTZdKlo2JUBHY+jiGLN8cZR7W6V8mmz+0DEfeCSdWuICJtNH+pYC+D5CMK76noiTbqhEJ+WOjMZLm5fDYigZqXQz1BzkrmJMmnX5WP1DR3Ll9tmq39AwlPMMyFKHdahepe/5oVe9YCsapqtPaf6zAanhuRxihfZIaYrwKFdyJB3lC2BRfsrv3SXP+CoaaqJa/gZd2ydWgDOrL3grbqdYUcJfh root@dev'
+privKey = '-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEA4mFxEiZQCdSiykT6UHrSpL+J3M0CoPdtSwdsrjuHoRUPslbV
+WGtUAIYv0JKapm+xW5CXfh2eMAG7RgxF4GpdeJm7zCd+vM6OPPwFM6QWBQvZVXVW
+OD8/ygQVdbsyzk2XSpaNiVAR2Po4hizfHGUe1ulfJps/tAxH3gknVriAibTR/qWA
+vg+QjCu+p6Ik26oRCfljozGS5uXw2IoGal0M9Qc5K5iTJp1+Vj9Q0dy5fbZqt/QM
+JTzDMhSh3WoXqXv+aFXvWArGqarT2n+swGp4bkcYoX2SGmK8ChXciQd5QtgUX7K7
+90lz/gqGmqiWv4GXdsnVoAzqy94K26nWFHCX4QIDAQABAoIBAAiuNdi9UVpfJfLd
+nD+Txhn9IjsuPUiQ1EcJPNidfcDmftiWzc17KBhxDMpRpM52//UD4Vs7pYIvvs+b
+zt4hFf523qWgahKxVPDvtP9a7mE5KBdHzYuQmVCUwYHnMLaKcR+yEDFQua55Qcub
+Ut7S3dDd2AEx+Mpdoi/YaALCRmOBUghccYz9MExuoVYriRYnvetJs8XeRpOgNYBV
+YuFjf2D60xDqPGCECTD1bktZPZv868g2XJQVdo0p0VpIWzNilRLIHhC8os43ZtW1
+NVy9ZpO6YEQ8Mt922meaNR+rp0HGk9nZOMMGbMlj7T8ccONrVHhJTUAeeAWb7p61
+EIqAFVUCgYEA9qwIn9aXmzxssjavYvfJITbvou07c5s/hBA0vhyRf4VjGE9q+fAg
+spYy1uviKopWspjxfbISafTB9JDtgxS9xA3YDutyXygsDiYhEigi+gKDFrMlVcTa
+7/xZog5g2Mk523AyxzlY5ZJq1ffRE/fSJsT8uLxKwaGD8tfQ9tuRzbsCgYEA6vD4
++m32wefYiitiR3k86wiO/i6sOJHCOPoovkrnfRaV9rZaflgqG2nNmK+GiE5KP34+
+ejvyj5MPY9cPU4MkQVhvUyUc4d346NayB0uybOLbVh2QqSp3nPF0cBNGd/0mQdtS
+da9AVwWUNzPv26AJGOvj+p5PvwI4P+IO8JWcSRMCgYBvRlPtpuRlRvDRxBGCV70H
+mrynhtUW5aXVcWoZiNGp8QYu5USg004swczVXzt7bUSG9K+bwETGP39vUCGUzDp+
+wrAAqv3BJ2IYT+MDSc/dcFyqVM42zsLlF7VngYz2vm+3Kfn+HUSY61/+ffh3RYgr
+rRlETMx8ZNwdJHZDpfE0GQKBgFp5jggyzLIDrLoY1vIbWEBSvW5ZXu0yBI+YlpQh
+mF/tkLa/pr29CgoghpJkFfTr4V/uJ/U+nLx5r5WNPlO0zwNzIPvt8N9yceaIt2pj
+1kRkYH8bR5g9yG5h9asrYRnYHSGDao/ze12Hwno3wAjd6mL0hIkA6kjue+buET7I
+/rSNAoGAKZA/ri9OmOLhPvT0vxrl2pIXfDGVqHwLvNO4aQdxZ9RKmWZ0/YxDU7sC
+rRFP5xFhCFyn9KClLMWfHv44nL32CM7/o2wBhSFqyMshsZaNZ/+egQzC4lhBcKJg
+rmCmYfedD1bdKIzK+Hmn4FxBKlexZfQsM2gVWxJaYErRickD6M4=
+-----END RSA PRIVATE KEY-----'
+
 # to cook:
 recipe = {
 	servers: {
@@ -60,23 +93,37 @@ new racksjs {username: process.argv[2], apiKey: process.argv[3], verbosity: 0, c
 	rack = rs
 	rack.datacenter = 'IAD'
 	buildServers recipe.servers, (servers) ->
-		#console.log 'steak', steak
+		# create servers
 		buildNetwork recipe.networks, (networks) ->
-			#console.log 'steak', steak
+			# create cloud networks
 			buildStorage recipe.storage, (storage) ->
-				#console.log 'steak', steak
+				# create cbs volumes
 				attachNetwork steak.networks, steak.servers, (vips) ->
-					#console.log 'steak', steak
+					# create vip for each server on each network
 					attachStorage steak.storage, steak.servers, (devices) ->
-						#console.log 'steak', steak
-						bootstrapSaltminions steak.servers, (minions) ->
-							#console.log 'steak', steak
-							runHighstate steak.servers, (cluster) ->
-								#console.log 'steak', steak
-								for server, details of steak.servers
-									console.log details.info
-								#verifyCluster cluster, (status) ->							
+						# attach cbs volume to corresponding server (matches on name)
+						setupSshKeys () ->
+							# copy public and private keys to all servers
+							checkoutSaltConfigs () ->
+								# checkout salt repo
+								buildSaltConfigs () ->
+									# add all servers to minion config as masters
+									# add all servers to salt group in the master config
+									# add all servers to hosts file
+									checkinSaltConfigs () ->
+										# checkin configs to  salt repo
+										deploySaltConfigs () ->
+											# checkout saltrepo on all servers
 
+												installSaltDaemons () ->
+													# install master and minion daemons on each server
+													runLocalState () ->
+														# run salt saltstate locally to configure salt minion and master
+														startSaltDaemons () ->
+															#start master and then start minion
+															runAppState () ->
+																# run the applications saltstate
+									
 # core function definitions
 
 buildServers = (servers , cb) ->
@@ -151,8 +198,19 @@ attachStorage = (volumes, servers, cb) ->
 					console.log 'attachment deatils', volId.volumeAttachment.device
 					cb()
 
-bootstrapSaltminions = (minions, cb) ->
-	bootstrap = 'curl -L http://bootstrap.saltstack.org | sh'
+setupSshKeys = () ->
+
+checkoutSaltConfigs = () ->
+
+buildSaltConfigs = () ->
+
+checkinSaltConfigs = () ->
+
+deploySaltConfigs = () ->
+
+installSaltDaemons = () ->
+	# bootstrap all nodes and master/minion
+	bootstrap = 'curl -L http://bootstrap.saltstack.org | sudo sh -s -- -M -X'
 	for name, server of minions
 		minion = {
 			host: server.info.accessIPv4
@@ -164,25 +222,11 @@ bootstrapSaltminions = (minions, cb) ->
 		sshCommand minion, bootstrap, (reply) ->
 			cb()
 
-runHighstate = (minions, cb) ->
-	getHighState = 'wget -O /root/recipes.tar -r -np https://github.com/asdqwex/salted-gluster/raw/master/recipes.tar'
-	extractHighState = 'mkdir -p /srv/salt && tar -xvf /root/recipes.tar -C /srv/salt'
-	highState = 'salt-call -l quiet --local state.highstate'
-	minion = {}
-	for name, server of minions
-		minion = {
-			host: server.info.accessIPv4
-			port: 22
-			username: 'root'
-			password: server.adminPass
-		}
-		sshCommand minion, getHighState, () ->
-			sshCommand minion, extractHighState, () ->
-				sshCommand minion, highState, () ->
-					cb()
+runLocalState = () ->
 
+startSaltDaemons = () ->
 
-verifyCluster = (mountpoint, cb) ->
+runAppState = () ->
 
 # Utility functions
 
