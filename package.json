@@ -1,0 +1,11 @@
+{
+	"name": "",
+	"author": "",
+	"email": "",
+	"version": "0.0.1",
+	"dependencies": {
+		"ssh2": "latest",
+		"sleep": "latest",
+		"coffee-script": "latest"
+	}
+}
