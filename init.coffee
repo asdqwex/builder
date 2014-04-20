@@ -1,15 +1,19 @@
 # We need:
 racksjs = require  './racks.js'
 rack = false
+sys = require 'sys'
+fs = require 'fs'
+exec = require('child_process').exec
 Connection = require 'ssh2'
 sleep = require 'sleep'
 
 # The cookbooks
-saltRepo = 'https://github.com/asdqwex/salt.git'
+repo = 'https://github.com/asdqwex/salt.git'
 
 # The keys to the kingdom
 pubKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDiYXESJlAJ1KLKRPpQetKkv4nczQKg921LB2yuO4ehFQ+yVtVYa1QAhi/Qkpqmb7FbkJd+HZ4wAbtGDEXgal14mbvMJ368zo48/AUzpBYFC9lVdVY4Pz/KBBV1uzLOTZdKlo2JUBHY+jiGLN8cZR7W6V8mmz+0DEfeCSdWuICJtNH+pYC+D5CMK76noiTbqhEJ+WOjMZLm5fDYigZqXQz1BzkrmJMmnX5WP1DR3Ll9tmq39AwlPMMyFKHdahepe/5oVe9YCsapqtPaf6zAanhuRxihfZIaYrwKFdyJB3lC2BRfsrv3SXP+CoaaqJa/gZd2ydWgDOrL3grbqdYUcJfh root@dev'
-privKey = '-----BEGIN RSA PRIVATE KEY-----
+privKey = '''
+-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEA4mFxEiZQCdSiykT6UHrSpL+J3M0CoPdtSwdsrjuHoRUPslbV
 WGtUAIYv0JKapm+xW5CXfh2eMAG7RgxF4GpdeJm7zCd+vM6OPPwFM6QWBQvZVXVW
 OD8/ygQVdbsyzk2XSpaNiVAR2Po4hizfHGUe1ulfJps/tAxH3gknVriAibTR/qWA
@@ -35,7 +39,8 @@ mF/tkLa/pr29CgoghpJkFfTr4V/uJ/U+nLx5r5WNPlO0zwNzIPvt8N9yceaIt2pj
 /rSNAoGAKZA/ri9OmOLhPvT0vxrl2pIXfDGVqHwLvNO4aQdxZ9RKmWZ0/YxDU7sC
 rRFP5xFhCFyn9KClLMWfHv44nL32CM7/o2wBhSFqyMshsZaNZ/+egQzC4lhBcKJg
 rmCmYfedD1bdKIzK+Hmn4FxBKlexZfQsM2gVWxJaYErRickD6M4=
------END RSA PRIVATE KEY-----'
+-----END RSA PRIVATE KEY-----
+'''
 
 # to cook:
 recipe = {
@@ -102,19 +107,17 @@ new racksjs {username: process.argv[2], apiKey: process.argv[3], verbosity: 0, c
 					# create vip for each server on each network
 					attachStorage steak.storage, steak.servers, (devices) ->
 						# attach cbs volume to corresponding server (matches on name)
-						setupSshKeys () ->
+						setupSshKeys steak.servers, () ->
 							# copy public and private keys to all servers
 							checkoutSaltConfigs () ->
 								# checkout salt repo
-								buildSaltConfigs () ->
+								buildSaltConfigs steak.servers, () ->
 									# add all servers to minion config as masters
-									# add all servers to salt group in the master config
 									# add all servers to hosts file
 									checkinSaltConfigs () ->
 										# checkin configs to  salt repo
 										deploySaltConfigs () ->
 											# checkout saltrepo on all servers
-
 												installSaltDaemons () ->
 													# install master and minion daemons on each server
 													runLocalState () ->
@@ -198,17 +201,75 @@ attachStorage = (volumes, servers, cb) ->
 					console.log 'attachment deatils', volId.volumeAttachment.device
 					cb()
 
-setupSshKeys = () ->
+setupSshKeys = (servers, cb) ->
+	injectKeys = 'echo "' + privKey + '" > ~/.ssh/id_rsa && echo "' + pubKey + '" >> ~/.ssh/authorized_keys'
 
-checkoutSaltConfigs = () ->
+	for name, server of servers
+		target = {
+			host: server.info.accessIPv4
+			port: 22
+			username: 'root'
+			password: server.adminPass
+		}
+		console.log 'target:', target.host
+		sshCommand target, injectKeys, (reply) ->
+			cb()
 
-buildSaltConfigs = () ->
+checkoutSaltConfigs = (cb) ->
+	command = 'cd /tmp/ && git clone ' + repo
 
-checkinSaltConfigs = () ->
+	localCommand command, (out) ->
+		console.log out
 
-deploySaltConfigs = () ->
+buildSaltConfigs = (servers, cb) ->
+		ipCopunt = 0
+		serverCounter = 0
+		ips = []
+		minionConfig = 'master: \r\n'
+		#get just the ips
+		for name, server of servers 
+			serverCounter++
+			ips.append(server.info.glusterVip)
+			if serverCounter >= servers.length
+				for ip in ips
+					ipCopunt++
+					# add all servers to minion config as masters
+					minionconfig = minionConfig + server.info.glusterVip + '\r\n'
+					if ipCopunt >= ips.length
+						data = fs.readFileSync '/tmp/salt/minion'
+						fd = fs.openSync '/tmp/salt/minion', 'w+'
+						buffer = new Buffer minionConfig
+						fs.writeSync fd, buffer, 0, buffer.length
+						fs.writeSync fd, data, 0, data.length
+						fs.close fd
+						# add all servers to hosts file
+						for ip in ips
+							line = ip +"	"+name
+							fs.appendFile '/tmp/salt/hosts', line, (err)->
+								console.log err
 
-installSaltDaemons = () ->
+checkinSaltConfigs = (cb) ->
+	command = 'cd /tmp/salt && git add . && git commit -m "deployemnt" && git push '
+
+	localCommand command, (out) ->
+		console.log out
+
+deploySaltConfigs = (servers, cb) ->
+	checkloutConfigs = 'cd /root && git clone ' + repo
+
+	for name, server of servers
+		target = {
+			host: server.info.accessIPv4
+			port: 22
+			username: 'root'
+			password: server.adminPass
+		}
+		console.log 'target:', target.host
+		sshCommand target, checkloutConfigs, (reply) ->
+			cb()
+
+
+installSaltDaemons = (cb) ->
 	# bootstrap all nodes and master/minion
 	bootstrap = 'curl -L http://bootstrap.saltstack.org | sudo sh -s -- -M -X'
 	for name, server of minions
@@ -223,10 +284,43 @@ installSaltDaemons = () ->
 			cb()
 
 runLocalState = () ->
+	localState = 'salt-call state.highstate --local'
+	for name, server of servers
+		target = {
+			host: server.info.accessIPv4
+			port: 22
+			username: 'root'
+			password: server.adminPass
+		}
+		console.log 'target:', target.host
+		sshCommand target, localState, (reply) ->
+			cb()
 
 startSaltDaemons = () ->
+	startServices = 'service salt-master start && serivce salt-minion start'
+	for name, server of servers
+		target = {
+			host: server.info.accessIPv4
+			port: 22
+			username: 'root'
+			password: server.adminPass
+		}
+		console.log 'target:', target.host
+		sshCommand target, startServices, (reply) ->
+			cb()
 
 runAppState = () ->
+	appState = 'salt-call state.highstate'
+	for name, server of servers
+		target = {
+			host: server.info.accessIPv4
+			port: 22
+			username: 'root'
+			password: server.adminPass
+		}
+		console.log 'target:', target.host
+		sshCommand target, appState, (reply) ->
+			cb()
 
 # Utility functions
 
@@ -255,3 +349,11 @@ sshCommand = (target, command, cb) ->
 		console.log 'Connection :: close'
 		cb()
 	c.connect target
+
+localCommand = (command, cb) ->
+	exec command, (error, stdout, stderr) ->
+		sys.print 'stdout: ' + stdout
+		sys.print 'stderr: ' + stderr
+		if error != null
+			console.log 'exec error: ' + error
+
