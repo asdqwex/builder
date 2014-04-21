@@ -217,7 +217,7 @@ setupSshKeys = (servers, cb) ->
 
 checkoutSaltConfigs = (cb) ->
 	console.log 'checkoutSaltConfigs'
-	command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo
+	command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo + '&& rm -f /tmp/salt/minion && rm -f /tmp/salt/hosts'
 	console.log command
 	localCommand command, (out) ->
 		cb()

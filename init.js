@@ -267,7 +267,7 @@
   checkoutSaltConfigs = function(cb) {
     var command;
     console.log('checkoutSaltConfigs');
-    command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo;
+    command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo + '&& rm -f /tmp/salt/minion && rm -f /tmp/salt/hosts';
     console.log(command);
     return localCommand(command, function(out) {
       return cb();
