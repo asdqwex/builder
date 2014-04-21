@@ -8,7 +8,7 @@ Connection = require 'ssh2'
 sleep = require 'sleep'
 
 # The cookbooks
-repo = 'https://github.com/asdqwex/salt.git'
+repo = 'git@github.com:asdqwex/salt.git'
 
 # The keys to the kingdom
 pubKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDiYXESJlAJ1KLKRPpQetKkv4nczQKg921LB2yuO4ehFQ+yVtVYa1QAhi/Qkpqmb7FbkJd+HZ4wAbtGDEXgal14mbvMJ368zo48/AUzpBYFC9lVdVY4Pz/KBBV1uzLOTZdKlo2JUBHY+jiGLN8cZR7W6V8mmz+0DEfeCSdWuICJtNH+pYC+D5CMK76noiTbqhEJ+WOjMZLm5fDYigZqXQz1BzkrmJMmnX5WP1DR3Ll9tmq39AwlPMMyFKHdahepe/5oVe9YCsapqtPaf6zAanhuRxihfZIaYrwKFdyJB3lC2BRfsrv3SXP+CoaaqJa/gZd2ydWgDOrL3grbqdYUcJfh root@dev'
@@ -116,15 +116,15 @@ new racksjs {username: process.argv[2], apiKey: process.argv[3], verbosity: 0, c
 									# add all servers to hosts file
 									checkinSaltConfigs () ->
 										# checkin configs to  salt repo
-										deploySaltConfigs () ->
+										deploySaltConfigs steak.servers, () ->
 											# checkout saltrepo on all servers
-												installSaltDaemons () ->
+												installSaltDaemons steak.servers, () ->
 													# install master and minion daemons on each server
-													runLocalState () ->
+													runLocalState steak.servers, () ->
 														# run salt saltstate locally to configure salt minion and master
-														startSaltDaemons () ->
+														startSaltDaemons steak.servers, () ->
 															#start master and then start minion
-															runAppState () ->
+															runAppState steak.servers, () ->
 																# run the applications saltstate
 									
 # core function definitions
@@ -202,8 +202,8 @@ attachStorage = (volumes, servers, cb) ->
 					cb()
 
 setupSshKeys = (servers, cb) ->
+	console.log 'setupSshKeys'
 	injectKeys = 'echo "' + privKey + '" > ~/.ssh/id_rsa && echo "' + pubKey + '" >> ~/.ssh/authorized_keys'
-
 	for name, server of servers
 		target = {
 			host: server.info.accessIPv4
@@ -216,46 +216,67 @@ setupSshKeys = (servers, cb) ->
 			cb()
 
 checkoutSaltConfigs = (cb) ->
-	command = 'cd /tmp/ && git clone ' + repo
-
+	console.log 'checkoutSaltConfigs'
+	command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo
+	console.log command
 	localCommand command, (out) ->
-		console.log out
+		cb()
 
 buildSaltConfigs = (servers, cb) ->
-		ipCopunt = 0
-		serverCounter = 0
+	console.log 'buildSaltConfigs'
+	getIps = (servers, cb) ->
+		ipCount = 0
 		ips = []
+		for name, server of servers
+			do ->
+				currentServer = server
+				ipCount++
+				ips.push(currentServer.info.glusterVip)
+				if ipCount == Object.keys(servers).length
+					cb(ips)
+
+	generateMinionConfig = (ips, cb) ->
 		minionConfig = 'master: \r\n'
-		#get just the ips
-		for name, server of servers 
-			serverCounter++
-			ips.append(server.info.glusterVip)
-			if serverCounter >= servers.length
-				for ip in ips
-					ipCopunt++
-					# add all servers to minion config as masters
-					minionconfig = minionConfig + server.info.glusterVip + '\r\n'
-					if ipCopunt >= ips.length
-						data = fs.readFileSync '/tmp/salt/minion'
-						fd = fs.openSync '/tmp/salt/minion', 'w+'
-						buffer = new Buffer minionConfig
-						fs.writeSync fd, buffer, 0, buffer.length
-						fs.writeSync fd, data, 0, data.length
-						fs.close fd
-						# add all servers to hosts file
-						for ip in ips
-							line = ip +"	"+name
-							fs.appendFile '/tmp/salt/hosts', line, (err)->
-								console.log err
+		fs.appendFile '/tmp/salt/minion', minionConfig, (err)->
+		minionCount = 0
+		for name, server of servers
+			do ->
+				currentServer = server
+				line = currentServer.info.glusterVip.toString()
+				fs.appendFile '/tmp/salt/minion', line, ()->
+					minionCount++
+					if minionCount == ips.length
+						cb()
+
+	generateHosts = (servers, cb) ->
+		hostsCount = 0
+		line = ''
+		for name, server of servers
+			do ->
+				currentServer = server
+				line = currentServer.info.glusterVip.toString() + "		" +name
+				console.log line
+				fs.appendFile '/tmp/salt/hosts', line, (err)->
+					hostsCount++
+					if hostsCount == Object.keys(servers).length						
+						cb(line)
+
+	getIps servers, (ips) ->
+		generateMinionConfig ips, (minioncfg) ->
+			generateHosts servers, (hosts) ->
+				cb()
 
 checkinSaltConfigs = (cb) ->
+	console.log 'checkinSaltConfigs'
 	command = 'cd /tmp/salt && git add . && git commit -m "deployemnt" && git push '
 
 	localCommand command, (out) ->
 		console.log out
+		cb()
 
 deploySaltConfigs = (servers, cb) ->
-	checkloutConfigs = 'cd /root && git clone ' + repo
+	console.log 'deploySaltConfigs'
+	checkloutConfigs = 'apt-get -y install git && cd /root && git clone ' + repo
 
 	for name, server of servers
 		target = {
@@ -268,11 +289,11 @@ deploySaltConfigs = (servers, cb) ->
 		sshCommand target, checkloutConfigs, (reply) ->
 			cb()
 
-
-installSaltDaemons = (cb) ->
+installSaltDaemons = (servers, cb) ->
+	console.log 'installSaltDaemons'
 	# bootstrap all nodes and master/minion
 	bootstrap = 'curl -L http://bootstrap.saltstack.org | sudo sh -s -- -M -X'
-	for name, server of minions
+	for name, server of servers
 		minion = {
 			host: server.info.accessIPv4
 			port: 22
@@ -283,7 +304,8 @@ installSaltDaemons = (cb) ->
 		sshCommand minion, bootstrap, (reply) ->
 			cb()
 
-runLocalState = () ->
+runLocalState = (servers, cb) ->
+	console.log 'runLocalState'
 	localState = 'salt-call state.highstate --local'
 	for name, server of servers
 		target = {
@@ -296,7 +318,8 @@ runLocalState = () ->
 		sshCommand target, localState, (reply) ->
 			cb()
 
-startSaltDaemons = () ->
+startSaltDaemons = (servers, cb) ->
+	console.log 'startSaltDaemons'
 	startServices = 'service salt-master start && serivce salt-minion start'
 	for name, server of servers
 		target = {
@@ -309,9 +332,12 @@ startSaltDaemons = () ->
 		sshCommand target, startServices, (reply) ->
 			cb()
 
-runAppState = () ->
+runAppState = (servers, cb) ->
+	console.log 'runAppState'
 	appState = 'salt-call state.highstate'
+	count = 0
 	for name, server of servers
+		count++
 		target = {
 			host: server.info.accessIPv4
 			port: 22
@@ -354,6 +380,6 @@ localCommand = (command, cb) ->
 	exec command, (error, stdout, stderr) ->
 		sys.print 'stdout: ' + stdout
 		sys.print 'stderr: ' + stderr
-		if error != null
-			console.log 'exec error: ' + error
+		cb()
+
 

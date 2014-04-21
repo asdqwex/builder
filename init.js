@@ -17,7 +17,7 @@
 
   sleep = require('sleep');
 
-  repo = 'https://github.com/asdqwex/salt.git';
+  repo = 'git@github.com:asdqwex/salt.git';
 
   pubKey = 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDiYXESJlAJ1KLKRPpQetKkv4nczQKg921LB2yuO4ehFQ+yVtVYa1QAhi/Qkpqmb7FbkJd+HZ4wAbtGDEXgal14mbvMJ368zo48/AUzpBYFC9lVdVY4Pz/KBBV1uzLOTZdKlo2JUBHY+jiGLN8cZR7W6V8mmz+0DEfeCSdWuICJtNH+pYC+D5CMK76noiTbqhEJ+WOjMZLm5fDYigZqXQz1BzkrmJMmnX5WP1DR3Ll9tmq39AwlPMMyFKHdahepe/5oVe9YCsapqtPaf6zAanhuRxihfZIaYrwKFdyJB3lC2BRfsrv3SXP+CoaaqJa/gZd2ydWgDOrL3grbqdYUcJfh root@dev';
 
@@ -71,11 +71,11 @@
                 return checkoutSaltConfigs(function() {
                   return buildSaltConfigs(steak.servers, function() {
                     return checkinSaltConfigs(function() {
-                      return deploySaltConfigs(function() {
-                        return installSaltDaemons(function() {
-                          return runLocalState(function() {
-                            return startSaltDaemons(function() {
-                              return runAppState(function() {});
+                      return deploySaltConfigs(steak.servers, function() {
+                        return installSaltDaemons(steak.servers, function() {
+                          return runLocalState(steak.servers, function() {
+                            return startSaltDaemons(steak.servers, function() {
+                              return runAppState(steak.servers, function() {});
                             });
                           });
                         });
@@ -245,6 +245,7 @@
 
   setupSshKeys = function(servers, cb) {
     var injectKeys, name, server, target, _results;
+    console.log('setupSshKeys');
     injectKeys = 'echo "' + privKey + '" > ~/.ssh/id_rsa && echo "' + pubKey + '" >> ~/.ssh/authorized_keys';
     _results = [];
     for (name in servers) {
@@ -265,74 +266,103 @@
 
   checkoutSaltConfigs = function(cb) {
     var command;
-    command = 'cd /tmp/ && git clone ' + repo;
+    console.log('checkoutSaltConfigs');
+    command = 'cd /tmp/ && rm -rf /tmp/salt && git clone ' + repo;
+    console.log(command);
     return localCommand(command, function(out) {
-      return console.log(out);
+      return cb();
     });
   };
 
   buildSaltConfigs = function(servers, cb) {
-    var buffer, data, fd, ip, ipCopunt, ips, line, minionConfig, minionconfig, name, server, serverCounter, _results;
-    ipCopunt = 0;
-    serverCounter = 0;
-    ips = [];
-    minionConfig = 'master: \r\n';
-    _results = [];
-    for (name in servers) {
-      server = servers[name];
-      serverCounter++;
-      ips.append(server.info.glusterVip);
-      if (serverCounter >= servers.length) {
+    var generateHosts, generateMinionConfig, getIps;
+    console.log('buildSaltConfigs');
+    getIps = function(servers, cb) {
+      var ipCount, ips, name, server, _results;
+      ipCount = 0;
+      ips = [];
+      _results = [];
+      for (name in servers) {
+        server = servers[name];
         _results.push((function() {
-          var _i, _len, _results1;
-          _results1 = [];
-          for (_i = 0, _len = ips.length; _i < _len; _i++) {
-            ip = ips[_i];
-            ipCopunt++;
-            minionconfig = minionConfig + server.info.glusterVip + '\r\n';
-            if (ipCopunt >= ips.length) {
-              data = fs.readFileSync('/tmp/salt/minion');
-              fd = fs.openSync('/tmp/salt/minion', 'w+');
-              buffer = new Buffer(minionConfig);
-              fs.writeSync(fd, buffer, 0, buffer.length);
-              fs.writeSync(fd, data, 0, data.length);
-              fs.close(fd);
-              _results1.push((function() {
-                var _j, _len1, _results2;
-                _results2 = [];
-                for (_j = 0, _len1 = ips.length; _j < _len1; _j++) {
-                  ip = ips[_j];
-                  line = ip(+"	" + name);
-                  _results2.push(fs.appendFile('/tmp/salt/hosts', line, function(err) {
-                    return console.log(err);
-                  }));
-                }
-                return _results2;
-              })());
-            } else {
-              _results1.push(void 0);
-            }
+          var currentServer;
+          currentServer = server;
+          ipCount++;
+          ips.push(currentServer.info.glusterVip);
+          if (ipCount === Object.keys(servers).length) {
+            return cb(ips);
           }
-          return _results1;
         })());
-      } else {
-        _results.push(void 0);
       }
-    }
-    return _results;
+      return _results;
+    };
+    generateMinionConfig = function(ips, cb) {
+      var minionConfig, minionCount, name, server, _results;
+      minionConfig = 'master: \r\n';
+      fs.appendFile('/tmp/salt/minion', minionConfig, function(err) {});
+      minionCount = 0;
+      _results = [];
+      for (name in servers) {
+        server = servers[name];
+        _results.push((function() {
+          var currentServer, line;
+          currentServer = server;
+          line = currentServer.info.glusterVip.toString();
+          return fs.appendFile('/tmp/salt/minion', line, function() {
+            minionCount++;
+            if (minionCount === ips.length) {
+              return cb();
+            }
+          });
+        })());
+      }
+      return _results;
+    };
+    generateHosts = function(servers, cb) {
+      var hostsCount, line, name, server, _results;
+      hostsCount = 0;
+      line = '';
+      _results = [];
+      for (name in servers) {
+        server = servers[name];
+        _results.push((function() {
+          var currentServer;
+          currentServer = server;
+          line = currentServer.info.glusterVip.toString() + "		" + name;
+          console.log(line);
+          return fs.appendFile('/tmp/salt/hosts', line, function(err) {
+            hostsCount++;
+            if (hostsCount === Object.keys(servers).length) {
+              return cb(line);
+            }
+          });
+        })());
+      }
+      return _results;
+    };
+    return getIps(servers, function(ips) {
+      return generateMinionConfig(ips, function(minioncfg) {
+        return generateHosts(servers, function(hosts) {
+          return cb();
+        });
+      });
+    });
   };
 
   checkinSaltConfigs = function(cb) {
     var command;
+    console.log('checkinSaltConfigs');
     command = 'cd /tmp/salt && git add . && git commit -m "deployemnt" && git push ';
     return localCommand(command, function(out) {
-      return console.log(out);
+      console.log(out);
+      return cb();
     });
   };
 
   deploySaltConfigs = function(servers, cb) {
     var checkloutConfigs, name, server, target, _results;
-    checkloutConfigs = 'cd /root && git clone ' + repo;
+    console.log('deploySaltConfigs');
+    checkloutConfigs = 'apt-get -y install git && cd /root && git clone ' + repo;
     _results = [];
     for (name in servers) {
       server = servers[name];
@@ -350,12 +380,13 @@
     return _results;
   };
 
-  installSaltDaemons = function(cb) {
+  installSaltDaemons = function(servers, cb) {
     var bootstrap, minion, name, server, _results;
+    console.log('installSaltDaemons');
     bootstrap = 'curl -L http://bootstrap.saltstack.org | sudo sh -s -- -M -X';
     _results = [];
-    for (name in minions) {
-      server = minions[name];
+    for (name in servers) {
+      server = servers[name];
       minion = {
         host: server.info.accessIPv4,
         port: 22,
@@ -370,8 +401,9 @@
     return _results;
   };
 
-  runLocalState = function() {
+  runLocalState = function(servers, cb) {
     var localState, name, server, target, _results;
+    console.log('runLocalState');
     localState = 'salt-call state.highstate --local';
     _results = [];
     for (name in servers) {
@@ -390,8 +422,9 @@
     return _results;
   };
 
-  startSaltDaemons = function() {
+  startSaltDaemons = function(servers, cb) {
     var name, server, startServices, target, _results;
+    console.log('startSaltDaemons');
     startServices = 'service salt-master start && serivce salt-minion start';
     _results = [];
     for (name in servers) {
@@ -410,12 +443,15 @@
     return _results;
   };
 
-  runAppState = function() {
-    var appState, name, server, target, _results;
+  runAppState = function(servers, cb) {
+    var appState, count, name, server, target, _results;
+    console.log('runAppState');
     appState = 'salt-call state.highstate';
+    count = 0;
     _results = [];
     for (name in servers) {
       server = servers[name];
+      count++;
       target = {
         host: server.info.accessIPv4,
         port: 22,
@@ -474,9 +510,7 @@
     return exec(command, function(error, stdout, stderr) {
       sys.print('stdout: ' + stdout);
       sys.print('stderr: ' + stderr);
-      if (error !== null) {
-        return console.log('exec error: ' + error);
-      }
+      return cb();
     });
   };
 

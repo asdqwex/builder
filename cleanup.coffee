@@ -10,7 +10,7 @@ new racksjs {username: process.argv[2], apiKey: process.argv[3], verbosity: 3, c
 			if servers.length > 0
 				for server in servers
 					server.metadata (metadata) ->
-						if metadata.metadata.label = 'glusterfs-node'
+						if metadata.metadata.label == 'glusterfs-node'
 							console.log 'deleteing server:', server.name
 							servercount++
 							server.delete (reply) ->
@@ -46,7 +46,6 @@ new racksjs {username: process.argv[2], apiKey: process.argv[3], verbosity: 3, c
 				for network in networks
 					netcount++
 					if network.id isnt '00000000-0000-0000-0000-000000000000' and network.id isnt '11111111-1111-1111-1111-111111111111'	
-						console.log network
 						network.delete (reply) ->
 							console.log reply
 							if --netcount == 0

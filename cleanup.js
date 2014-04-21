@@ -27,7 +27,7 @@
           for (_i = 0, _len = servers.length; _i < _len; _i++) {
             server = servers[_i];
             _results.push(server.metadata(function(metadata) {
-              if (metadata.metadata.label = 'glusterfs-node') {
+              if (metadata.metadata.label === 'glusterfs-node') {
                 console.log('deleteing server:', server.name);
                 servercount++;
                 return server["delete"](function(reply) {
@@ -85,7 +85,6 @@
             network = networks[_i];
             netcount++;
             if (network.id !== '00000000-0000-0000-0000-000000000000' && network.id !== '11111111-1111-1111-1111-111111111111') {
-              console.log(network);
               _results.push(network["delete"](function(reply) {
                 console.log(reply);
                 if (--netcount === 0) {
